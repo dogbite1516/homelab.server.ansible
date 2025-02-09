@@ -1,0 +1,35 @@
+- name: Create Kubernetes VMs using SSH
+  hosts: proxmox
+  gather_facts: no
+  vars:
+    proxmox_node: "pve1"
+    ubuntu_template_id: 1060  # Change this to your actual Ubuntu template ID
+    storage: "synoNFS"
+    vms:
+      - { name: "k8s-master", vmid: 112, memory: 8192, cores: 4, mac: "52:54:00:79:3A:2E", ip: "10.29.29.15" }
+      - { name: "k8s-worker1", vmid: 113, memory: 4096, cores: 2, mac: "52:54:00:76:2E:BA", ip: "10.29.29.16" }
+      - { name: "k8s-worker2", vmid: 114, memory: 4096, cores: 2, mac: "52:54:00:B1:3F:39", ip: "10.29.29.17" }
+
+  tasks:
+    - name: Clone Ubuntu template for Kubernetes VMs
+      ansible.builtin.command:
+        cmd: >
+          qm clone {{ ubuntu_template_id }} {{ item.vmid }} --name {{ item.name }} --full true --storage {{ storage }} --target {{ proxmox_node }}
+      loop: "{{ vms }}"
+
+    - name: Configure VM hardware (Memory, CPU, Network)
+      ansible.builtin.command:
+        cmd: >
+          qm set {{ item.vmid }} --memory {{ item.memory }} --cores {{ item.cores }} --net0 virtio,bridge=vmbr0,macaddr={{ item.mac }}
+      loop: "{{ vms }}"
+
+    - name: Configure Cloud-Init (IP settings)
+      ansible.builtin.command:
+        cmd: >
+          qm set {{ item.vmid }} --ipconfig0 ip={{ item.ip }}/24,gw=192.168.1.1
+      loop: "{{ vms }}"
+
+    - name: Start the VMs
+      ansible.builtin.command:
+        cmd: qm start {{ item.vmid }}
+      loop: "{{ vms }}"
